@@ -243,6 +243,7 @@ pub async fn mpv_play(
 
     mpv.cmd_tx
         .send(MpvCommand::LoadFile {
+            item_id,
             url,
             start_seconds,
             // Stream selection is applied via the Jellyfin URL query parameters.

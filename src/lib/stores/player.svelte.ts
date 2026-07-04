@@ -402,8 +402,10 @@ export function initPlayerListeners() {
     subtitleTrack = event.payload.subtitle_track;
   });
 
-  listen("mpv-file-ended", () => {
-    status = "ended";
+  listen<string>("mpv-file-ended", (event) => {
+    if (event.payload === getPlayerItemId()) {
+      status = "ended";
+    }
   });
 
   listen("mpv-stopped", () => {

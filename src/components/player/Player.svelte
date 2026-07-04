@@ -568,7 +568,7 @@
 
     if (ctx.autoplayStateItemId !== playerItemId) {
       ctx.autoplayStateItemId = playerItemId;
-      ctx.cancelAutoplayCountdown(); // resets dismissed & count
+      ctx.resetAutoplayDismissal(); // resets dismissed & count
     }
 
     if (ctx.playbackContextItemId !== playerItemId) {

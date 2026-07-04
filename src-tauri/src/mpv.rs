@@ -8,6 +8,7 @@ use objc::{msg_send, sel, sel_impl};
 /// Commands sent from Tauri command handlers to the MPV thread.
 pub enum MpvCommand {
     LoadFile {
+        item_id: String,
         url: String,
         start_seconds: f64,
         audio_track: Option<i64>,
@@ -342,7 +343,11 @@ fn run_mpv_loop(
     mpv.event_context_mut()
         .observe_property("sid", libmpv2::Format::Int64, 0)
         .unwrap();
+    mpv.event_context_mut()
+        .observe_property("eof-reached", libmpv2::Format::Flag, 0)
+        .unwrap();
 
+    let mut current_item_id: Option<String> = None;
     let mut time_pos: f64 = 0.0;
     let mut duration: f64 = 0.0;
     let mut volume: f64 = 100.0;
@@ -387,12 +392,14 @@ fn run_mpv_loop(
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
                 MpvCommand::LoadFile {
+                    item_id,
                     url,
                     start_seconds,
                     audio_track: initial_audio_track,
                     subtitle_track: initial_subtitle_track,
                     headers,
                 } => {
+                    current_item_id = Some(item_id);
                     // Set custom HTTP headers (such as X-Emby-Token) for stream and subtitle requests
                     if !headers.is_empty() {
                         let headers_str = headers.join(",");
@@ -774,11 +781,16 @@ fn run_mpv_loop(
                             subtitle_track,
                         );
                     }
+                    ("eof-reached", PropertyData::Flag(eof)) => {
+                        if eof {
+                            if let Some(ref item_id) = current_item_id {
+                                let _ = app_handle.emit("mpv-file-ended", item_id);
+                            }
+                        }
+                    }
                     _ => {}
                 },
-                Event::EndFile(_reason) => {
-                    let _ = app_handle.emit("mpv-file-ended", ());
-                }
+                Event::EndFile(_reason) => {}
                 _ => {}
             }
         }
