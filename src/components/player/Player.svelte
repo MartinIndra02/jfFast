@@ -15,6 +15,9 @@
     setMuted,
     setPlaybackRate,
     getVideoScaleMode,
+    isPipMode,
+    isPipTransitioning,
+    setPipState,
   } from "../../lib/stores/player.svelte";
   import {
     mpvTogglePause,
@@ -26,6 +29,8 @@
     mpvSetSubtitlePosition,
     mpvStop,
     mpvSetVideoScale,
+    mpvEnterPip,
+    mpvExitPip,
   } from "../../lib/api";
   import { getPreferences } from "../../lib/stores/preferences.svelte";
   import type { MediaItem, ChapterInfo } from "../../lib/types";
@@ -34,6 +39,7 @@
   import PlayerTimeline from "./PlayerTimeline.svelte";
   import PlayerControls from "./PlayerControls.svelte";
   import SkipSegmentButton from "./SkipSegmentButton.svelte";
+  import PipPlayer from "./PipPlayer.svelte";
   import { useAutoHide } from "./useAutoHide.svelte";
   import { usePlaybackContext } from "./usePlaybackContext.svelte";
 
@@ -293,6 +299,16 @@
   }
 
   async function stopPlayer(nextEpisodeHint: MediaItem | null = null) {
+    if (isPipMode()) {
+      setPipState({ mode: "exiting" });
+      try {
+        await mpvExitPip();
+      } catch (e) {
+        console.error("Failed to exit PiP on stop:", e);
+      }
+      setPipState({ mode: "normal" });
+    }
+
     ctx.stopAutoplayCountdown();
     
     // Start reporting and cleanup tasks asynchronously
@@ -321,6 +337,32 @@
       syncFullscreenState();
     } catch (e) {
       console.warn("Fullscreen toggle failed", e);
+    }
+  }
+
+  const pipMode = $derived(isPipMode());
+
+  async function enterPipMode() {
+    if (isPipMode() || isPipTransitioning()) return;
+    setPipState({ mode: "entering" });
+    try {
+      await mpvEnterPip();
+      setPipState({ mode: "pip" });
+    } catch (e) {
+      console.error("Failed to enter PiP:", e);
+      setPipState({ mode: "normal" });
+    }
+  }
+
+  async function exitPipMode() {
+    if (!isPipMode() || isPipTransitioning()) return;
+    setPipState({ mode: "exiting" });
+    try {
+      await mpvExitPip();
+      setPipState({ mode: "normal" });
+    } catch (e) {
+      console.error("Failed to exit PiP:", e);
+      setPipState({ mode: "pip" });
     }
   }
 
@@ -412,6 +454,14 @@
       case "f":
       case "F":
         void toggleFullscreen();
+        break;
+      case "p":
+      case "P":
+        if (pipMode) {
+          void exitPipMode();
+        } else {
+          void enterPipMode();
+        }
         break;
       case "[": {
         e.preventDefault();
@@ -699,101 +749,109 @@
 />
 
 {#if playerVisible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-[9999] flex flex-col justify-between"
-    style:background-color={playerStatus === "loading" ? "black" : "transparent"}
-    class:cursor-none={!autoHide.controlsVisible}
-    class:player-cursor-hidden={!autoHide.controlsVisible}
-    onmousemove={autoHide.handleMouseMove}
-    onmouseleave={autoHide.handleMouseLeave}
-  >
-    <PlayerHeader
-      title={playerTitle}
-      controlsVisible={autoHide.controlsVisible}
-      {isFullscreen}
-      stopPlayer={() => void stopPlayer()}
-      {toggleFullscreen}
+  {#if pipMode}
+    <PipPlayer
+      onExpand={exitPipMode}
+      onClose={() => void stopPlayer()}
     />
-
-    <button
-      class="absolute inset-0 z-0 w-full h-full"
-      onclick={handleOverlayClick}
-      aria-label={isPaused ? "Resume playback" : "Pause playback"}
-    ></button>
-
-    {#if showSkipButton}
-      <div class="absolute bottom-[10.5rem] sm:bottom-[11.5rem] left-0 w-full px-3 sm:px-6 pointer-events-none z-[10000]">
-        <div class="mx-auto w-full max-w-6xl flex justify-end">
-          <SkipSegmentButton
-            label={skipButtonLabel}
-            onSkip={skipSegment}
-          />
-        </div>
-      </div>
-    {/if}
-
-    <PlayerControls
-      {playerTitle}
-      selectedQualityLabel={ctx.selectedQualityLabel}
-      {endTimeEstimate}
-      mediaStreams={ctx.mediaStreams}
-      {audioMenuLabel}
-      {subtitleMenuLabel}
-      {audioMenuOpen}
-      {subtitleMenuOpen}
-      {overflowMenuOpen}
-      {toggleTopMenu}
-      selectedAudioIndex={ctx.selectedAudioIndex}
-      selectedSubtitleIndex={ctx.selectedSubtitleIndex}
-      applyTrackSelection={ctx.applyTrackSelection}
-      playbackRate={rate}
-      {mpvSetPlaybackRate}
-      {videoScaleMode}
-      {mpvSetVideoScale}
-      {autoCropEnabled}
-      qualityOptions={ctx.qualityOptions}
-      selectedQualityKey={ctx.selectedQualityKey}
-      changeQuality={ctx.changeQuality}
-      autoplayCountdown={ctx.autoplayCountdown}
-      cancelAutoplayCountdown={ctx.cancelAutoplayCountdown}
-      {formatTime}
-      {effectivePos}
-      {dur}
-      previousEpisode={ctx.previousEpisode}
-      nextEpisode={ctx.nextEpisode}
-      playPreviousEpisode={() => ctx.playPreviousEpisode()}
-      playNextEpisode={() => ctx.playNextEpisode()}
-      {seekBack10}
-      {seekForward30}
-      {togglePause}
-      {isPaused}
-      {playerStatus}
-      vol={vol}
-      {handleVolumeInput}
-      {toggleMute}
-      muted={muted}
-      controlsVisible={autoHide.controlsVisible}
-      hasChapters={ctx.chapters.length > 0}
-      onPrevChapter={skipToPreviousChapter}
-      onNextChapter={skipToNextChapter}
-      prevChapterDisabled={previousChapterTime === null && pos <= 2.0}
-      nextChapterDisabled={nextChapterTime === null}
+  {:else}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed inset-0 z-[9999] flex flex-col justify-between"
+      style:background-color={playerStatus === "loading" ? "black" : "transparent"}
+      class:cursor-none={!autoHide.controlsVisible}
+      class:player-cursor-hidden={!autoHide.controlsVisible}
+      onmousemove={autoHide.handleMouseMove}
+      onmouseleave={autoHide.handleMouseLeave}
     >
-      <PlayerTimeline
+      <PlayerHeader
+        title={playerTitle}
+        controlsVisible={autoHide.controlsVisible}
+        {isFullscreen}
+        stopPlayer={() => void stopPlayer()}
+        {toggleFullscreen}
+        enterPip={enterPipMode}
+      />
+
+      <button
+        class="absolute inset-0 z-0 w-full h-full"
+        onclick={handleOverlayClick}
+        aria-label={isPaused ? "Resume playback" : "Pause playback"}
+      ></button>
+
+      {#if showSkipButton}
+        <div class="absolute bottom-[10.5rem] sm:bottom-[11.5rem] left-0 w-full px-3 sm:px-6 pointer-events-none z-[10000]">
+          <div class="mx-auto w-full max-w-6xl flex justify-end">
+            <SkipSegmentButton
+              label={skipButtonLabel}
+              onSkip={skipSegment}
+            />
+          </div>
+        </div>
+      {/if}
+
+      <PlayerControls
+        {playerTitle}
+        selectedQualityLabel={ctx.selectedQualityLabel}
+        {endTimeEstimate}
+        mediaStreams={ctx.mediaStreams}
+        {audioMenuLabel}
+        {subtitleMenuLabel}
+        {audioMenuOpen}
+        {subtitleMenuOpen}
+        {overflowMenuOpen}
+        {toggleTopMenu}
+        selectedAudioIndex={ctx.selectedAudioIndex}
+        selectedSubtitleIndex={ctx.selectedSubtitleIndex}
+        applyTrackSelection={ctx.applyTrackSelection}
+        playbackRate={rate}
+        {mpvSetPlaybackRate}
+        {videoScaleMode}
+        {mpvSetVideoScale}
+        {autoCropEnabled}
+        qualityOptions={ctx.qualityOptions}
+        selectedQualityKey={ctx.selectedQualityKey}
+        changeQuality={ctx.changeQuality}
+        autoplayCountdown={ctx.autoplayCountdown}
+        cancelAutoplayCountdown={ctx.cancelAutoplayCountdown}
+        {formatTime}
         {effectivePos}
         {dur}
-        {progressPercent}
-        {chapterMarkers}
-        mediaSegments={ctx.mediaSegments}
-        {isScrubbing}
-        bind:progressScrubEl
-        {beginTimelineScrub}
-        {handleProgressKeydown}
-        {seekToChapter}
-      />
-    </PlayerControls>
-  </div>
+        previousEpisode={ctx.previousEpisode}
+        nextEpisode={ctx.nextEpisode}
+        playPreviousEpisode={() => ctx.playPreviousEpisode()}
+        playNextEpisode={() => ctx.playNextEpisode()}
+        {seekBack10}
+        {seekForward30}
+        {togglePause}
+        {isPaused}
+        {playerStatus}
+        vol={vol}
+        {handleVolumeInput}
+        {toggleMute}
+        muted={muted}
+        controlsVisible={autoHide.controlsVisible}
+        hasChapters={ctx.chapters.length > 0}
+        onPrevChapter={skipToPreviousChapter}
+        onNextChapter={skipToNextChapter}
+        prevChapterDisabled={previousChapterTime === null && pos <= 2.0}
+        nextChapterDisabled={nextChapterTime === null}
+      >
+        <PlayerTimeline
+          {effectivePos}
+          {dur}
+          {progressPercent}
+          {chapterMarkers}
+          mediaSegments={ctx.mediaSegments}
+          {isScrubbing}
+          bind:progressScrubEl
+          {beginTimelineScrub}
+          {handleProgressKeydown}
+          {seekToChapter}
+        />
+      </PlayerControls>
+    </div>
+  {/if}
 {/if}
 
 <style>

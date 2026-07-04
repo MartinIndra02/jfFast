@@ -12,6 +12,14 @@ export type PlayerStatus = "idle" | "loading" | "playing" | "paused" | "ended";
 // ── Reactive state ──────────────────────────────────────────────
 
 let status = $state<PlayerStatus>("idle");
+
+export type PipState =
+  | { mode: "normal" }
+  | { mode: "entering" }
+  | { mode: "pip" }
+  | { mode: "exiting" };
+
+let pipState = $state<PipState>({ mode: "normal" });
 let visible = $state(false);
 let title = $state("");
 let itemId = $state<string | null>(null);
@@ -183,6 +191,22 @@ export function getRequestedSubtitleIndex(): number | null {
   return requestedSubtitleIndex;
 }
 
+export function getPipState(): PipState {
+  return pipState;
+}
+
+export function isPipMode(): boolean {
+  return pipState.mode === "pip";
+}
+
+export function isPipTransitioning(): boolean {
+  return pipState.mode === "entering" || pipState.mode === "exiting";
+}
+
+export function setPipState(s: PipState) {
+  pipState = s;
+}
+
 
 // ── Actions ─────────────────────────────────────────────────────
 
@@ -219,6 +243,7 @@ export function resetPlayerState() {
   duration = 0;
   requestedAudioIndex = null;
   requestedSubtitleIndex = null;
+  pipState = { mode: "normal" };
 }
 
 export function hidePlayer() {

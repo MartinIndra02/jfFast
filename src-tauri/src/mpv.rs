@@ -54,10 +54,34 @@ pub struct MpvPlaybackSettings {
     pub subtitle_track: Option<i64>,
 }
 
+/// Saved window state before entering PiP, used for restoration.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PipSavedState {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub was_maximized: bool,
+    pub was_fullscreen: bool,
+    pub original_min_width: Option<u32>,
+    pub original_min_height: Option<u32>,
+}
+
+/// Geometry of the PiP window (position and size).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PipGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// Managed Tauri state for the MPV player.
 pub struct MpvState {
     pub cmd_tx: mpsc::Sender<MpvCommand>,
     pub child_hwnd: isize,
+    pub pip_state: parking_lot::Mutex<Option<PipSavedState>>,
+    pub last_pip_geometry: parking_lot::Mutex<Option<PipGeometry>>,
 }
 
 fn emit_playback_settings_if_changed(

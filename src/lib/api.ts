@@ -378,6 +378,14 @@ export async function mpvStop(): Promise<void> {
   return invoke("mpv_stop");
 }
 
+export async function mpvEnterPip(): Promise<void> {
+  return invoke("mpv_enter_pip");
+}
+
+export async function mpvExitPip(): Promise<void> {
+  return invoke("mpv_exit_pip");
+}
+
 export async function getMediaStreams(
   id: string,
   options: ApiRequestOptions = {},
