@@ -78,6 +78,7 @@
   let scrubSeconds = $state<number | null>(null);
   let pendingSeekSeconds = $state<number | null>(null);
   let pendingSeekClearTimer: ReturnType<typeof setTimeout> | null = null;
+  let clickTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const SUBTITLE_POSITION_STORAGE_KEY = "jfgoat.player.subtitleBottomPercent";
   const DEFAULT_SUBTITLE_POSITION_PERCENT = 95;
@@ -377,7 +378,17 @@
       autoHide.resetHideTimer();
       return;
     }
-    void togglePause();
+
+    if (clickTimeout) {
+      clearTimeout(clickTimeout);
+      clickTimeout = null;
+      void toggleFullscreen();
+    } else {
+      clickTimeout = setTimeout(() => {
+        void togglePause();
+        clickTimeout = null;
+      }, 250);
+    }
   }
 
   async function seekBack10() {
@@ -606,6 +617,7 @@
 
   onDestroy(() => {
     if (pendingSeekClearTimer) clearTimeout(pendingSeekClearTimer);
+    if (clickTimeout) clearTimeout(clickTimeout);
   });
 
   // ── Svelte effects coordination ─────────────────────────────
