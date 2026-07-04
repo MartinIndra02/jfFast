@@ -482,6 +482,7 @@ pub async fn mpv_enter_pip(
             .map_err(|e| JfgoatError::Internal(format!("set_decorations: {}", e)))?;
         window.set_always_on_top(true)
             .map_err(|e| JfgoatError::Internal(format!("set_always_on_top: {}", e)))?;
+        #[cfg(not(target_os = "macos"))]
         window.set_skip_taskbar(true)
             .map_err(|e| JfgoatError::Internal(format!("set_skip_taskbar: {}", e)))?;
 
@@ -556,6 +557,7 @@ pub async fn mpv_enter_pip(
     if let Err(e) = result {
         window.set_decorations(true).ok();
         window.set_always_on_top(false).ok();
+        #[cfg(not(target_os = "macos"))]
         window.set_skip_taskbar(false).ok();
         window.set_size(tauri::Size::Physical(
             tauri::PhysicalSize::new(size.width, size.height)
@@ -611,6 +613,7 @@ pub async fn mpv_exit_pip(
 
     // ── 3. Obnovit dekorace ───────────────────────────────
     window.set_always_on_top(false).ok();
+    #[cfg(not(target_os = "macos"))]
     window.set_skip_taskbar(false).ok();
     window.set_decorations(true).ok();
 
