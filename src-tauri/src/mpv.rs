@@ -32,6 +32,7 @@ pub enum MpvCommand {
 /// Emitted as Tauri event payloads for time position updates.
 #[derive(Debug, Clone, Serialize)]
 pub struct MpvTimeUpdate {
+    pub item_id: String,
     pub position: f64,
     pub duration: f64,
 }
@@ -358,7 +359,7 @@ fn run_mpv_loop(
     let mut subtitle_track: Option<i64> = None;
     let mut last_emitted_settings: Option<MpvPlaybackSettings> = None;
     let mut last_emit = std::time::Instant::now();
-    let emit_interval = std::time::Duration::from_millis(250);
+    let emit_interval = std::time::Duration::from_millis(100);
 
     // Autocrop tracking state
     let mut auto_crop_mode = String::from("static");
@@ -400,6 +401,8 @@ fn run_mpv_loop(
                     headers,
                 } => {
                     current_item_id = Some(item_id);
+                    time_pos = 0.0;
+                    duration = 0.0;
                     // Set custom HTTP headers (such as X-Emby-Token) for stream and subtitle requests
                     if !headers.is_empty() {
                         let headers_str = headers.join(",");
@@ -443,6 +446,7 @@ fn run_mpv_loop(
                         mpv.set_property("start", "0").ok();
                     }
                     mpv.command("loadfile", &[&url, "replace"]).ok();
+                    let _ = mpv.set_property("pause", false);
 
                     if let Some(track) = initial_audio_track {
                         audio_track = Some(track);
@@ -696,6 +700,9 @@ fn run_mpv_loop(
                 MpvCommand::Stop => {
                     mpv.command("stop", &[]).ok();
                     let _ = app_handle.emit("mpv-stopped", ());
+                    time_pos = 0.0;
+                    duration = 0.0;
+                    current_item_id = None;
                 }
             }
         }
@@ -865,14 +872,17 @@ fn run_mpv_loop(
 
         // 3. Throttled time position broadcast (~4 updates/sec)
         if last_emit.elapsed() >= emit_interval && duration > 0.0 {
-            let _ = app_handle.emit(
-                "mpv-time-update",
-                MpvTimeUpdate {
-                    position: time_pos,
-                    duration,
-                },
-            );
-            last_emit = std::time::Instant::now();
+            if let Some(ref item_id) = current_item_id {
+                let _ = app_handle.emit(
+                    "mpv-time-update",
+                    MpvTimeUpdate {
+                        item_id: item_id.clone(),
+                        position: time_pos,
+                        duration,
+                    },
+                );
+                last_emit = std::time::Instant::now();
+            }
         }
     }
 }

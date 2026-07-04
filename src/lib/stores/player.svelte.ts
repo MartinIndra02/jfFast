@@ -366,6 +366,8 @@ export function initPlayerListeners() {
   listenersAttached = true;
 
   listen<MpvTimeUpdate>("mpv-time-update", (event) => {
+    if (event.payload.item_id !== getPlayerItemId()) return;
+
     timePos = event.payload.position;
     duration = event.payload.duration;
     if (status === "loading" && !loadingTimeout) {
