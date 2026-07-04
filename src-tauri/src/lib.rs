@@ -23,6 +23,29 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|_window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
+                {
+                    use tauri::Manager;
+                    if let Some(mpv_state) = _window.try_state::<crate::mpv::MpvState>() {
+                        let saved = mpv_state.pip_state.lock().take();
+                        if let Some(saved) = saved {
+                            _window.set_always_on_top(false).ok();
+                            _window.set_skip_taskbar(false).ok();
+                            _window.set_decorations(true).ok();
+                            _window.set_min_size(None::<tauri::Size>).ok();
+                            if saved.was_maximized {
+                                _window.maximize().ok();
+                            } else if !saved.was_fullscreen {
+                                _window.set_size(tauri::Size::Physical(
+                                    tauri::PhysicalSize::new(saved.width, saved.height)
+                                )).ok();
+                                _window.set_position(tauri::Position::Physical(
+                                    tauri::PhysicalPosition::new(saved.x, saved.y)
+                                )).ok();
+                            }
+                        }
+                    }
+                }
                 #[cfg(target_os = "macos")]
                 {
                     api.prevent_close();
@@ -197,7 +220,12 @@ pub fn run() {
 
                 mpv::spawn_mpv_thread(child_hwnd, cmd_rx, app_handle);
 
-                app.manage(mpv::MpvState { cmd_tx, child_hwnd });
+                app.manage(mpv::MpvState {
+                    cmd_tx,
+                    child_hwnd,
+                    pip_state: parking_lot::Mutex::new(None),
+                    last_pip_geometry: parking_lot::Mutex::new(None),
+                });
 
                 // Resize mpv child window when the main window is resized (Windows only)
                 #[cfg(target_os = "windows")]
@@ -260,6 +288,8 @@ pub fn run() {
             commands::mpv_set_subtitle_track,
             commands::mpv_add_external_subtitle,
             commands::mpv_stop,
+            commands::mpv_enter_pip,
+            commands::mpv_exit_pip,
             commands::get_media_streams,
             commands::get_media_segments,
             commands::get_item_chapters,

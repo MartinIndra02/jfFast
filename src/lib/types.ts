@@ -214,6 +214,7 @@ export interface OfflineDownload {
 // ── Player types ────────────────────────────────────────────────
 
 export interface MpvTimeUpdate {
+  item_id: string;
   position: number;
   duration: number;
 }

@@ -8,6 +8,7 @@ use objc::{msg_send, sel, sel_impl};
 /// Commands sent from Tauri command handlers to the MPV thread.
 pub enum MpvCommand {
     LoadFile {
+        item_id: String,
         url: String,
         start_seconds: f64,
         audio_track: Option<i64>,
@@ -31,6 +32,7 @@ pub enum MpvCommand {
 /// Emitted as Tauri event payloads for time position updates.
 #[derive(Debug, Clone, Serialize)]
 pub struct MpvTimeUpdate {
+    pub item_id: String,
     pub position: f64,
     pub duration: f64,
 }
@@ -52,10 +54,34 @@ pub struct MpvPlaybackSettings {
     pub subtitle_track: Option<i64>,
 }
 
+/// Saved window state before entering PiP, used for restoration.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PipSavedState {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub was_maximized: bool,
+    pub was_fullscreen: bool,
+    pub original_min_width: Option<u32>,
+    pub original_min_height: Option<u32>,
+}
+
+/// Geometry of the PiP window (position and size).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PipGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// Managed Tauri state for the MPV player.
 pub struct MpvState {
     pub cmd_tx: mpsc::Sender<MpvCommand>,
     pub child_hwnd: isize,
+    pub pip_state: parking_lot::Mutex<Option<PipSavedState>>,
+    pub last_pip_geometry: parking_lot::Mutex<Option<PipGeometry>>,
 }
 
 fn emit_playback_settings_if_changed(
@@ -342,7 +368,11 @@ fn run_mpv_loop(
     mpv.event_context_mut()
         .observe_property("sid", libmpv2::Format::Int64, 0)
         .unwrap();
+    mpv.event_context_mut()
+        .observe_property("eof-reached", libmpv2::Format::Flag, 0)
+        .unwrap();
 
+    let mut current_item_id: Option<String> = None;
     let mut time_pos: f64 = 0.0;
     let mut duration: f64 = 0.0;
     let mut volume: f64 = 100.0;
@@ -353,7 +383,7 @@ fn run_mpv_loop(
     let mut subtitle_track: Option<i64> = None;
     let mut last_emitted_settings: Option<MpvPlaybackSettings> = None;
     let mut last_emit = std::time::Instant::now();
-    let emit_interval = std::time::Duration::from_millis(250);
+    let emit_interval = std::time::Duration::from_millis(100);
 
     // Autocrop tracking state
     let mut auto_crop_mode = String::from("static");
@@ -387,12 +417,16 @@ fn run_mpv_loop(
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
                 MpvCommand::LoadFile {
+                    item_id,
                     url,
                     start_seconds,
                     audio_track: initial_audio_track,
                     subtitle_track: initial_subtitle_track,
                     headers,
                 } => {
+                    current_item_id = Some(item_id);
+                    time_pos = 0.0;
+                    duration = 0.0;
                     // Set custom HTTP headers (such as X-Emby-Token) for stream and subtitle requests
                     if !headers.is_empty() {
                         let headers_str = headers.join(",");
@@ -436,6 +470,7 @@ fn run_mpv_loop(
                         mpv.set_property("start", "0").ok();
                     }
                     mpv.command("loadfile", &[&url, "replace"]).ok();
+                    let _ = mpv.set_property("pause", false);
 
                     if let Some(track) = initial_audio_track {
                         audio_track = Some(track);
@@ -689,6 +724,9 @@ fn run_mpv_loop(
                 MpvCommand::Stop => {
                     mpv.command("stop", &[]).ok();
                     let _ = app_handle.emit("mpv-stopped", ());
+                    time_pos = 0.0;
+                    duration = 0.0;
+                    current_item_id = None;
                 }
             }
         }
@@ -774,11 +812,16 @@ fn run_mpv_loop(
                             subtitle_track,
                         );
                     }
+                    ("eof-reached", PropertyData::Flag(eof)) => {
+                        if eof {
+                            if let Some(ref item_id) = current_item_id {
+                                let _ = app_handle.emit("mpv-file-ended", item_id);
+                            }
+                        }
+                    }
                     _ => {}
                 },
-                Event::EndFile(_reason) => {
-                    let _ = app_handle.emit("mpv-file-ended", ());
-                }
+                Event::EndFile(_reason) => {}
                 _ => {}
             }
         }
@@ -853,14 +896,17 @@ fn run_mpv_loop(
 
         // 3. Throttled time position broadcast (~4 updates/sec)
         if last_emit.elapsed() >= emit_interval && duration > 0.0 {
-            let _ = app_handle.emit(
-                "mpv-time-update",
-                MpvTimeUpdate {
-                    position: time_pos,
-                    duration,
-                },
-            );
-            last_emit = std::time::Instant::now();
+            if let Some(ref item_id) = current_item_id {
+                let _ = app_handle.emit(
+                    "mpv-time-update",
+                    MpvTimeUpdate {
+                        item_id: item_id.clone(),
+                        position: time_pos,
+                        duration,
+                    },
+                );
+                last_emit = std::time::Instant::now();
+            }
         }
     }
 }

@@ -78,7 +78,15 @@ npm run release:tauri
 
 ## 📝 Changelog
 
-### v1.5.0 (Current)
+### v1.5.1 (Current)
+This release introduces Picture-in-Picture (PiP) mode, double-click to toggle fullscreen, playback improvements, and E2E test suite fixes:
+
+* **Picture-in-Picture (PiP) Mode**: Added support for Picture-in-Picture video playback.
+* **Double-Click Fullscreen**: Added support for toggling fullscreen mode by double-clicking on the media player.
+* **Playback Fixes**: Fixed video pausing unexpectedly at startup, and resolved bugs when playing the next video in sequence.
+* **Test Suite Updates**: Fixed E2E smoke test failure in search propagation timing.
+
+### v1.5.0
 This release includes aspect ratio controls, intro/chapter skipping, async player closing, network resilience improvements, and various navigation and layout fixes:
 
 * **Aspect Ratio Selection**: Added aspect ratio adjustments in the video player.

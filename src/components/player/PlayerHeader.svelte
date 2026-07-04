@@ -5,12 +5,14 @@
     isFullscreen,
     stopPlayer,
     toggleFullscreen,
+    enterPip,
   }: {
     title: string;
     controlsVisible: boolean;
     isFullscreen: boolean;
     stopPlayer: () => void;
     toggleFullscreen: () => void;
+    enterPip: () => void;
   } = $props();
 </script>
 
@@ -36,14 +38,27 @@
       </div>
     </div>
 
-    <button
-      onclick={toggleFullscreen}
-      aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-      class="h-10 w-10 grid place-items-center rounded-xl bg-[rgba(10,18,31,0.64)] border border-white/22 backdrop-blur-xl text-[var(--text-primary)] hover:bg-[rgba(22,34,54,0.76)] transition-colors"
-    >
-      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 3H5a2 2 0 00-2 2v3m16-5h-3m3 0v3M3 16v3a2 2 0 002 2h3m11-5v3a2 2 0 01-2 2h-3"/>
-      </svg>
-    </button>
+    <div class="flex items-center gap-2">
+      <button
+        onclick={enterPip}
+        aria-label="Picture in Picture"
+        class="h-10 w-10 grid place-items-center rounded-xl bg-[rgba(10,18,31,0.64)] border border-white/22 backdrop-blur-xl text-[var(--text-primary)] hover:bg-[rgba(22,34,54,0.76)] transition-colors"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <rect x="12" y="10" width="8" height="6" rx="1" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+
+      <button
+        onclick={toggleFullscreen}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        class="h-10 w-10 grid place-items-center rounded-xl bg-[rgba(10,18,31,0.64)] border border-white/22 backdrop-blur-xl text-[var(--text-primary)] hover:bg-[rgba(22,34,54,0.76)] transition-colors"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 3H5a2 2 0 00-2 2v3m16-5h-3m3 0v3M3 16v3a2 2 0 002 2h3m11-5v3a2 2 0 01-2 2h-3"/>
+        </svg>
+      </button>
+    </div>
   </div>
 </div>

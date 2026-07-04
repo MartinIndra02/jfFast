@@ -321,6 +321,7 @@ export async function installTauriMock(page: Page): Promise<void> {
         }
         case "mpv_play": {
           state.paused = false;
+          const itemId = String(args.itemId ?? "");
           queueMicrotask(() => {
             emit("mpv-playback-settings", {
               volume: 85,
@@ -331,7 +332,7 @@ export async function installTauriMock(page: Page): Promise<void> {
               subtitle_track: 2,
             });
             emit("mpv-state-change", { paused: false });
-            emit("mpv-time-update", { position: 1195, duration: 1200 });
+            emit("mpv-time-update", { item_id: itemId, position: 1195, duration: 1200 });
           });
           return null;
         }

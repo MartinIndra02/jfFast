@@ -458,6 +458,11 @@ export function usePlaybackContext() {
     stopAutoplayCountdown();
   }
 
+  function resetAutoplayDismissal() {
+    autoplayDismissedForCurrentItem = false;
+    stopAutoplayCountdown();
+  }
+
   function startAutoplayCountdown() {
     if (!nextEpisode || autoplayDismissedForCurrentItem || autoplayCountdown !== null) return;
     stopAutoplayCountdown();
@@ -702,6 +707,7 @@ export function usePlaybackContext() {
     applyTrackSelection,
     stopAutoplayCountdown,
     cancelAutoplayCountdown,
+    resetAutoplayDismissal,
     startAutoplayCountdown,
     playNextEpisode,
     playPreviousEpisode,
